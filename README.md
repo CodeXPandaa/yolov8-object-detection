@@ -1,157 +1,78 @@
-copyright @ DEPA MSU 2023 | Public
+# YOLOv8 Object Detection with Real-Time Speech Feedback
 
-# YoloV8-Silva || [YouTube](https://www.youtube.com/watch?v=hg4oVgNq7Do)
+Welcome to the **YOLOv8 Object Detection** project!  
+This repository demonstrates how to use the powerful [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics) model for real-time object detection on videos, enhanced with live speech feedback for detected objects.  
+Whether you're a computer vision enthusiast, a developer, or just curious about AI, this project provides an interactive and impressive showcase of modern deep learning in action.
 
-The most recent and cutting-edge `YOLO` model, `YoloV8`, can be utilized for applications including object identification, image categorization, and instance segmentation. `Ultralytics`, who also produced the influential `YOLOv5` model that defined the industry, developed `YOLOv8`. Compared to `YOLOv5`, `YOLOv8` has a number of architectural updates and enhancements.
+---
 
-![YoloV8 Basic Output](inference/banner.png)
+## 🚀 Features
 
-## Silva-Flow
+- **Real-time object detection** on video files using YOLOv8.
+- **Text-to-speech feedback**: Detected object classes are spoken aloud.
+- **Easy customization**: Swap in your own videos for instant results.
+- **Colorful bounding boxes** and class labels for clear visualization.
 
-We are simply using `YOLO` models in a python environment with opencv on `Windows`, `Mac` or `Linux` system. It can be imported from the ultralytics module
+---
 
-Two example codes were defined for the module
-`yolov8_basics.py` and `yolov8_n_opencv.py`
+## 🛠️ Getting Started
 
+### 1. Clone the Repository
 
+```sh
+git clone https://github.com/CodeXPandaa/yolov8-object-detection.git
+```
 
-> **Note**
->
-> Install requirements.txt file in a Python>=3.7.0 environment, including PyTorch>=1.7
+### 2. Install Requirements
 
-## Installation
+Make sure you have Python 3.8+ installed. Then, install the dependencies:
 
-```bash
+```sh
 pip install -r requirements.txt
 ```
 
-> **Note**
->
-> Link to official  [`YoloV8 GitHub page`](https://github.com/ultralytics/ultralytics). 
+### 3. Download or Place a Sample Video
 
+Place your sample video in the `inference/videos/` directory.  
+For example, if your video is named `sample.mp4`, copy it to:
 
-## Using `yolov8_basics.py`
-
-```python
-python yolov8_basics.py
+```
+inference/videos/sample.mp4
 ```
 
-![YoloV8 Basic Output](inference/out.JPG)
+### 4. Edit the Video Path
 
-
-
-## Using `yolov8_n_opencv.py`
-
-`Use YoloV8 is an OpenCV way`. Have control over detection on each frame and choose what happens per detection.
+Open `yolov8_n_opencv.py` and **change line 34** to use your video file:
 
 ```python
+cap = cv2.VideoCapture("inference/videos/sample.mp4")
+```
+
+### 5. Run the Object Detection Script
+
+```sh
 python yolov8_n_opencv.py
 ```
 
-## Code | `yolov8_n_opencv.py` |
+The script will process the video, display detected objects with bounding boxes, and announce detected classes via your speakers.
 
+---
 
-```python
+## 📂 Project Structure
 
-import numpy as np
-import cv2
-from ultralytics import YOLO
-import random
+- `yolov8_n_opencv.py` — Main script for video detection and speech.
+- `utils/coco.txt` — List of COCO dataset class names.
+- `weights/` — Pretrained YOLOv8 model weights.
+- `inference/videos/` — Directory for your test videos.
 
-# opening the file in read mode
-my_file = open("utils/coco.txt", "r")
-# reading the file
-data = my_file.read()
-# replacing end splitting the text | when newline ('\n') is seen.
-class_list = data.split("\n")
-my_file.close()
+---
 
-# print(class_list)
+## 🤖 Credits
 
-# Generate random colors for class list
-detection_colors = []
-for i in range(len(class_list)):
-    r = random.randint(0,255)
-    g = random.randint(0,255)
-    b = random.randint(0,255)
-    detection_colors.append((b,g,r))
+- [Ultralytics YOLOv8](https://github.com/ultralytics/ultralytics)
+- [OpenCV](https://opencv.org/)
+- [pyttsx3](https://pyttsx3.readthedocs.io/)
 
-# load a pretrained YOLOv8n model
-model = YOLO("weights/yolov8n.pt", "v8") 
+---
 
-# Vals to resize video frames | small frame optimise the run 
-frame_wid = 640
-frame_hyt = 480
-
-# cap = cv2.VideoCapture(1)
-cap = cv2.VideoCapture("inference/videos/afriq0.MP4")
-
-if not cap.isOpened():
-    print("Cannot open camera")
-    exit()
-
-while True:
-    # Capture frame-by-frame
-    ret, frame = cap.read()
-    # if frame is read correctly ret is True
-
-    if not ret:
-        print("Can't receive frame (stream end?). Exiting ...")
-        break
-
-    #  resize the frame | small frame optimise the run 
-    # frame = cv2.resize(frame, (frame_wid, frame_hyt))
-
-    # Predict on image
-    detect_params = model.predict(source=[frame], conf=0.45, save=False)
-
-    # Convert tensor array to numpy
-    DP = detect_params[0].numpy()
-    print(DP)
-
-    if len(DP) != 0:
-        for i in range(len(detect_params[0])):
-            print(i)
-
-            boxes = detect_params[0].boxes
-            box = boxes[i]  # returns one box
-            clsID = box.cls.numpy()[0]
-            conf = box.conf.numpy()[0]
-            bb = box.xyxy.numpy()[0]
-
-            cv2.rectangle(
-                frame,
-                (int(bb[0]), int(bb[1])),
-                (int(bb[2]), int(bb[3])),
-                detection_colors[int(clsID)],
-                3,
-            )
-
-            # Display class name and confidence
-            font = cv2.FONT_HERSHEY_COMPLEX
-            cv2.putText(
-                frame,
-                class_list[int(clsID)]
-                + " "
-                + str(round(conf, 3))
-                + "%",
-                (int(bb[0]), int(bb[1]) - 10),
-                font,
-                1,
-                (255, 255, 255),
-                2,
-            )
-
-    # Display the resulting frame
-    cv2.imshow('ObjectDetection', frame)
-
-    # Terminate run when "Q" pressed
-    if cv2.waitKey(1) == ord('q'):
-        break
-
-# When everything done, release the capture
-cap.release()
-cv2.destroyAllWindows()
-
-```
-
+Enjoy exploring the world of AI-powered object detection!
