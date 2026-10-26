@@ -1,6 +1,6 @@
 # 👁️ YOLOv8 Real-Time Object Detection with Voice Feedback
 
-![YOLOv8 Banner](inference/banner.png)
+
 
 [![Python](https://img.shields.io/badge/Python-3.8%2B-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
 [![Ultralytics YOLOv8](https://img.shields.io/badge/Ultralytics-YOLOv8-00599C?style=for-the-badge&logo=opencv&logoColor=white)](https://github.com/ultralytics/ultralytics)
