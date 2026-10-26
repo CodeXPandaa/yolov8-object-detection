@@ -1,11 +1,28 @@
 from pathlib import Path
 import random
+import sys
+import ctypes
 import cv2
 import numpy as np
 from ultralytics import YOLO
 import pyttsx3
 import threading
 import queue
+
+
+def get_screen_resolution():
+    """Retrieve primary monitor resolution with DPI awareness on Windows."""
+    width, height = 1920, 1080
+    if sys.platform == "win32":
+        try:
+            user32 = ctypes.windll.user32
+            user32.SetProcessDPIAware()
+            width = user32.GetSystemMetrics(0)
+            height = user32.GetSystemMetrics(1)
+        except Exception:
+            pass
+    return width, height
+
 
 # Project root directory (directory where this script is located)
 BASE_DIR = Path(__file__).resolve().parent
@@ -40,7 +57,7 @@ frame_wid = 640
 frame_hyt = 480
 
 # Video file path (resolved relative to script directory)
-video_path = BASE_DIR / "inference" / "videos" / "hi1 (2).mp4"
+video_path = BASE_DIR / "inference" / "videos" / "test0.mp4"
 # cap = cv2.VideoCapture(1)
 cap = cv2.VideoCapture(str(video_path))
 
@@ -70,12 +87,55 @@ if not cap.isOpened():
     exit()
 
 window_name = "ObjectDetection"
-cv2.namedWindow(window_name)
+# Use WINDOW_NORMAL so the window size is not constrained by video resolution
+cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
 
+# Set default window size to full screen
+screen_w, screen_h = get_screen_resolution()
+cv2.resizeWindow(window_name, screen_w, screen_h)
+
+# Keep aspect ratio for video content if supported by backend
+if hasattr(cv2, "WND_PROP_ASPECT_RATIO") and hasattr(cv2, "WINDOW_KEEPRATIO"):
+    try:
+        cv2.setWindowProperty(window_name, cv2.WND_PROP_ASPECT_RATIO, cv2.WINDOW_KEEPRATIO)
+    except Exception:
+        pass
+
+hwnd = None
+if sys.platform == "win32":
+    try:
+        hwnd = ctypes.windll.user32.FindWindowW(None, window_name)
+    except Exception:
+        hwnd = None
+
+window_maximized = False
 already_spoken = set()  # To avoid repeating the same class
 
 try:
     while True:
+        # Handle Windows window states (minimize, restore, close)
+        if sys.platform == "win32":
+            if not hwnd:
+                try:
+                    hwnd = ctypes.windll.user32.FindWindowW(None, window_name)
+                except Exception:
+                    pass
+
+            if hwnd:
+                try:
+                    # If window was destroyed / closed
+                    if not ctypes.windll.user32.IsWindow(hwnd):
+                        break
+
+                    # If window is minimized, wait briefly and pause video rendering
+                    if ctypes.windll.user32.IsIconic(hwnd):
+                        key = cv2.waitKey(30) & 0xFF
+                        if key in (ord("q"), ord("Q"), 27):
+                            break
+                        continue
+                except Exception:
+                    pass
+
         # Capture frame-by-frame
         ret, frame = cap.read()
         # if frame is read correctly ret is True
@@ -132,6 +192,22 @@ try:
 
         # Display the resulting frame
         cv2.imshow(window_name, frame)
+
+        # Maximize the window once upon first frame display
+        if not window_maximized:
+            if sys.platform == "win32":
+                if not hwnd:
+                    try:
+                        hwnd = ctypes.windll.user32.FindWindowW(None, window_name)
+                    except Exception:
+                        pass
+                if hwnd:
+                    try:
+                        # SW_MAXIMIZE = 3: maximizes window while keeping title bar & minimize button
+                        ctypes.windll.user32.ShowWindow(hwnd, 3)
+                    except Exception:
+                        pass
+            window_maximized = True
 
         # Process GUI events and key press
         key = cv2.waitKey(1) & 0xFF
