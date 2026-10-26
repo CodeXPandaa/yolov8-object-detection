@@ -89,6 +89,8 @@ def tts_worker():
         except Exception:
             sapi_voice = None
 
+    spoken_in_tts = set()
+
     while not stop_tts.is_set():
         try:
             text = speech_queue.get(timeout=0.1)
@@ -97,19 +99,28 @@ def tts_worker():
         if text is None or stop_tts.is_set():
             break
 
-        # Collect any immediately pending words to speak together naturally without lag
-        words = [text]
+        # Collect any immediately pending words to speak together naturally without duplicate words
+        words = []
+        if text not in spoken_in_tts:
+            words.append(text)
+            spoken_in_tts.add(text)
+
         while not speech_queue.empty() and len(words) < 4:
             try:
                 next_word = speech_queue.get_nowait()
                 if next_word is None:
                     stop_tts.set()
                     break
-                if next_word not in words:
+                if next_word not in words and next_word not in spoken_in_tts:
                     words.append(next_word)
+                    spoken_in_tts.add(next_word)
                 speech_queue.task_done()
             except queue.Empty:
                 break
+
+        if not words:
+            speech_queue.task_done()
+            continue
 
         phrase = ", ".join(words)
         try:
@@ -155,13 +166,11 @@ latest_detections = []  # List of tuples: (bb, clsID, conf, class_name)
 new_frame_event = threading.Event()
 stop_detection = threading.Event()
 
-# Speech cooldown and visibility tracking so all detected objects are spoken continuously
-last_spoken_time = {}  # class_name -> timestamp of last speech
-COOLDOWN_SECONDS = 1.5  # Seconds before repeating an object continuously in view
-previously_visible_classes = set()  # Track which classes were in the previous detection
+# Track already spoken classes so no duplicate words are ever spoken
+already_spoken = set()
 
 def detection_worker():
-    global pending_frame, latest_detections, previously_visible_classes
+    global pending_frame, latest_detections
     while not stop_detection.is_set():
         if not new_frame_event.wait(timeout=0.1):
             continue
@@ -195,19 +204,11 @@ def detection_worker():
                     new_detections.append((bb, clsID, conf, class_name))
                     current_frame_classes.add(class_name)
 
-            now = time.time()
-            # Queue detected words to speak in real time:
-            # 1. Any newly appearing class is announced immediately
-            # 2. Continuously visible classes repeat every 1.5s so speech continues until video ends
-            if speech_queue.qsize() < 4:
-                for class_name in current_frame_classes:
-                    is_new = class_name not in previously_visible_classes
-                    cooldown_passed = (now - last_spoken_time.get(class_name, 0)) >= COOLDOWN_SECONDS
-                    if is_new or cooldown_passed:
-                        speech_queue.put(class_name)
-                        last_spoken_time[class_name] = now
-
-            previously_visible_classes = current_frame_classes
+            # Speak each detected object class once as it appears without any duplicate words
+            for class_name in current_frame_classes:
+                if class_name not in already_spoken:
+                    already_spoken.add(class_name)
+                    speech_queue.put(class_name)
 
             with detection_lock:
                 latest_detections = new_detections
