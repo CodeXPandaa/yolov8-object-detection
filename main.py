@@ -1,3 +1,4 @@
+from pathlib import Path
 import random
 import cv2
 import numpy as np
@@ -6,15 +7,26 @@ import pyttsx3
 import threading
 import queue
 
-# opening the file in read mode
-my_file = open("utils/coco.txt", "r")
-# reading the file
-data = my_file.read()
-# replacing end splitting the text | when newline ('\n') is seen.
-class_list = data.split("\n")
-my_file.close()
+# Project root directory (directory where this script is located)
+BASE_DIR = Path(__file__).resolve().parent
 
-# print(class_list)
+# Load class list from utils/coco.txt (resolved relative to script directory)
+coco_file = BASE_DIR / "utils" / "coco.txt"
+if coco_file.is_file():
+    with open(coco_file, "r") as my_file:
+        data = my_file.read()
+    class_list = [line.strip() for line in data.splitlines() if line.strip()]
+else:
+    class_list = []
+
+# Load a pretrained YOLOv8n model
+weights_path = BASE_DIR / "weights" / "yolov8n.pt"
+model = YOLO(str(weights_path) if weights_path.is_file() else "yolov8n.pt", "v8")
+
+# Fallback to model's built-in class names if coco.txt wasn't found
+if not class_list and hasattr(model, "names") and model.names:
+    class_list = [model.names[i] for i in range(len(model.names))]
+
 # Generate random colors for class list
 detection_colors = []
 for i in range(len(class_list)):
@@ -23,15 +35,14 @@ for i in range(len(class_list)):
     b = random.randint(0, 255)
     detection_colors.append((b, g, r))
 
-# load a pretrained YOLOv8n model
-model = YOLO("weights/yolov8n.pt", "v8")
-
 # Vals to resize video frames | small frame optimise the run
 frame_wid = 640
 frame_hyt = 480
 
+# Video file path (resolved relative to script directory)
+video_path = BASE_DIR / "inference" / "videos" / "hi1 (2).mp4"
 # cap = cv2.VideoCapture(1)
-cap = cv2.VideoCapture("inference/videos/hi1 (2).mp4")
+cap = cv2.VideoCapture(str(video_path))
 
 # Initialize text-to-speech engine and queue
 engine = pyttsx3.init()
@@ -55,7 +66,7 @@ tts_thread = threading.Thread(target=tts_worker, daemon=True)
 tts_thread.start()
 
 if not cap.isOpened():
-    print("Cannot open camera")
+    print(f"Cannot open video source: {video_path}")
     exit()
 
 window_name = "ObjectDetection"
