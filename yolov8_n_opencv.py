@@ -31,16 +31,20 @@ frame_wid = 640
 frame_hyt = 480
 
 # cap = cv2.VideoCapture(1)
-cap = cv2.VideoCapture("inference/videos/afriq1.MP4")
+cap = cv2.VideoCapture("inference/videos/hi1 (2).mp4")
 
 # Initialize text-to-speech engine and queue
 engine = pyttsx3.init()
 speech_queue = queue.Queue()
+stop_tts = threading.Event()
 
 def tts_worker():
-    while True:
-        text = speech_queue.get()
-        if text is None:
+    while not stop_tts.is_set():
+        try:
+            text = speech_queue.get(timeout=0.2)
+        except queue.Empty:
+            continue
+        if text is None or stop_tts.is_set():
             break  # Exit signal
         engine.say(text)
         engine.runAndWait()
@@ -54,74 +58,96 @@ if not cap.isOpened():
     print("Cannot open camera")
     exit()
 
+window_name = "ObjectDetection"
+cv2.namedWindow(window_name)
+
 already_spoken = set()  # To avoid repeating the same class
 
-while True:
-    # Capture frame-by-frame
-    ret, frame = cap.read()
-    # if frame is read correctly ret is True
+try:
+    while True:
+        # Capture frame-by-frame
+        ret, frame = cap.read()
+        # if frame is read correctly ret is True
 
-    if not ret:
-        print("Can't receive frame (stream end?). Exiting ...")
-        break
+        if not ret:
+            print("Can't receive frame (stream end?). Exiting ...")
+            break
 
-    #  resize the frame | small frame optimise the run
-    # frame = cv2.resize(frame, (frame_wid, frame_hyt))
+        #  resize the frame | small frame optimise the run
+        # frame = cv2.resize(frame, (frame_wid, frame_hyt))
 
-    # Predict on image
-    detect_params = model.predict(source=[frame], conf=0.45, save=False)
+        # Predict on image
+        detect_params = model.predict(source=[frame], conf=0.45, save=False)
 
-    # Convert tensor array to numpy
-    DP = detect_params[0].numpy()
-    print(DP)
+        # Convert tensor array to numpy
+        DP = detect_params[0].numpy()
+        print(DP)
 
-    if len(DP) != 0:
-        spoken_classes = set()
-        for i in range(len(detect_params[0])):
-            print(i)
+        if len(DP) != 0:
+            spoken_classes = set()
+            for i in range(len(detect_params[0])):
+                print(i)
 
-            boxes = detect_params[0].boxes
-            box = boxes[i]  # returns one box
-            clsID = box.cls.numpy()[0]
-            conf = box.conf.numpy()[0]
-            bb = box.xyxy.numpy()[0]
+                boxes = detect_params[0].boxes
+                box = boxes[i]  # returns one box
+                clsID = box.cls.numpy()[0]
+                conf = box.conf.numpy()[0]
+                bb = box.xyxy.numpy()[0]
 
-            cv2.rectangle(
-                frame,
-                (int(bb[0]), int(bb[1])),
-                (int(bb[2]), int(bb[3])),
-                detection_colors[int(clsID)],
-                3,
-            )
+                cv2.rectangle(
+                    frame,
+                    (int(bb[0]), int(bb[1])),
+                    (int(bb[2]), int(bb[3])),
+                    detection_colors[int(clsID)],
+                    3,
+                )
 
-            # Display class name and confidence
-            font = cv2.FONT_HERSHEY_COMPLEX
-            class_name = class_list[int(clsID)]
-            cv2.putText(
-                frame,
-                class_name + " " + str(round(conf, 3)) + "%",
-                (int(bb[0]), int(bb[1]) - 10),
-                font,
-                1,
-                (255, 255, 255),
-                2,
-            )
-            if class_name not in already_spoken:
-                speech_queue.put(class_name)
-                already_spoken.add(class_name)
-            spoken_classes.add(class_name)
+                # Display class name and confidence
+                font = cv2.FONT_HERSHEY_COMPLEX
+                class_name = class_list[int(clsID)]
+                cv2.putText(
+                    frame,
+                    class_name + " " + str(round(conf, 3)) + "%",
+                    (int(bb[0]), int(bb[1]) - 10),
+                    font,
+                    1,
+                    (255, 255, 255),
+                    2,
+                )
+                if class_name not in already_spoken:
+                    speech_queue.put(class_name)
+                    already_spoken.add(class_name)
+                spoken_classes.add(class_name)
 
-    # Display the resulting frame
-    cv2.imshow("ObjectDetection", frame)
+        # Display the resulting frame
+        cv2.imshow(window_name, frame)
 
-    # Terminate run when "Q" pressed
-    if cv2.waitKey(1) == ord("q"):
-        break
+        # Process GUI events and key press
+        key = cv2.waitKey(1) & 0xFF
+        # Terminate run when 'q', 'Q', or ESC is pressed
+        if key == ord("q") or key == ord("Q") or key == 27:
+            break
 
-# Cleanup: stop TTS thread
-speech_queue.put(None)
-tts_thread.join()
+        # Terminate run when window close button (X) is clicked
+        if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
+            break
 
-# When everything done, release the capture
-cap.release()
-cv2.destroyAllWindows()
+finally:
+    # Cleanup: stop TTS thread promptly
+    stop_tts.set()
+    while not speech_queue.empty():
+        try:
+            speech_queue.get_nowait()
+        except queue.Empty:
+            break
+    speech_queue.put(None)
+    try:
+        engine.stop()
+    except Exception:
+        pass
+    tts_thread.join(timeout=1.0)
+
+    # When everything done, release the capture and destroy windows
+    cap.release()
+    cv2.destroyAllWindows()
+    cv2.waitKey(1)

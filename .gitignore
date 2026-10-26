@@ -1,6 +1,7 @@
 # Ignore files
-
+__pycache__
 .DS_Store
 .ds_store
 *.pt
+.venv
 runs

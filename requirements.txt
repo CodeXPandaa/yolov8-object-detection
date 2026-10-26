@@ -1,5 +1,15 @@
-# Ultralytics requirements
+# YOLOv8 Object Detection with Real-Time Speech Feedback
 # Usage: pip install -r requirements.txt
 
-# Base ----------------------------------------
-ultralytics
+# Object Detection & Deep Learning
+ultralytics>=8.0.0
+
+# Computer Vision & Image Processing
+opencv-python>=4.8.0
+numpy>=1.23.0
+
+# Text-to-Speech Feedback
+pyttsx3>=2.90
+
+# Windows-specific TTS support for pyttsx3 (SAPI5 driver)
+pywin32>=306; sys_platform == 'win32'
